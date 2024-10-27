@@ -56,7 +56,7 @@ def clean_customer_data(df):
         if duplicates > 0:
             logger.warning(f"Removed {duplicates} duplicate customer IDs")
         
-        # Fill NaN values in name with a placeholder
+        # Fill NaN values in name and with a placeholder
         df['name'] = df['name'].fillna('Unknown Customer')
         df['email'] = df['email'].fillna('Unknown Customer')
         df['email'] = df['email'].astype(str)
@@ -87,8 +87,9 @@ def clean_order_data(df, valid_customer_ids=None):
         df = df.dropna(subset=['id'])
         df = df.dropna(subset=['display_order_id'])
         df = df.dropna(subset=['customer_id'])
+        df = df.dropna(subset=['total_amount'])
 
-        logger.info(f"Dropped {initial_count - len(df)} orders with missing order IDs and id's")
+        logger.info(f"Dropped {initial_count - len(df)} orders with missing information")
         
         # Remove duplicates
         duplicates = df.duplicated(subset=['id'], keep='first').sum()
@@ -122,7 +123,7 @@ def clean_order_data(df, valid_customer_ids=None):
         raise
 
 def import_data_sqlalchemy(customer_file, order_file, connection_string, batch_size=1000):
-    """Import data using mysql-connector-python"""
+    """Import data using sql alchemy"""
     try:
         engine = create_engine(connection_string)
         # Read and clean data
@@ -131,40 +132,8 @@ def import_data_sqlalchemy(customer_file, order_file, connection_string, batch_s
         orders_df = clean_order_data(pd.read_csv(order_file))
         
         orphaned_customer_ids = analyze_data_integrity(customers_df, orders_df)
-
-        # Connect to database
-        # conn = mysql.connector.connect(**db_config)
-        # cursor = conn.cursor()
         
-        # Import customers
-        logger.info("Importing customers...")
-        customer_query = "INSERT INTO customers (customer_id, name, email) VALUES (%s, %s,%s)"
-        
-        # for i in range(0, len(customers_df), batch_size):
-        #     batch = customers_df.iloc[i:i + batch_size]
-        #     values = list(batch.itertuples(index=False, name=None))
-        #     cursor.executemany(customer_query, values)
-        #     conn.commit()
-        #     logger.info(f"Imported customers batch {i//batch_size + 1}")
-        
-        # # Import orders
-        # logger.info("Importing orders...")
-        # order_query = """
-        #     INSERT INTO orders (id,display_order_id,total_amount,created_at,customer_id) 
-        #     VALUES (%s, %s, %s, %s,%s)
-        # """
-        
-        # for i in range(0, len(orders_df), batch_size):
-        #     batch = orders_df.iloc[i:i + batch_size]
-        #     values = [
-        #         (row.id, row.display_order_id, row.total_amount, row.created_at,row.customer_id)
-        #         for row in batch.itertuples(index=False)
-        #     ]
-        #     cursor.executemany(order_query, values)
-        #     conn.commit()
-        #     logger.info(f"Imported orders batch {i//batch_size + 1}")
-        
-        # logger.info("Data import completed successfully!")
+        # Import customers        
         logger.info("Importing customers to database...")
         for i in range(0, len(customers_df), batch_size):
             batch = customers_df.iloc[i:i + batch_size]
@@ -203,10 +172,8 @@ def import_data_sqlalchemy(customer_file, order_file, connection_string, batch_s
             conn.close()
 
 if __name__ == "__main__":
-    # # For SQLAlchemy version
+
    
-    
-    # For mysql-connector version
     DB_CONFIG = {
         'host': os.getenv('DB_HOST'),
         'user': os.getenv('DB_USER'),
@@ -215,22 +182,14 @@ if __name__ == "__main__":
     }
 
     CONNECTION_STRING = f"mysql+mysqlconnector://{DB_CONFIG['user']}:{DB_CONFIG['password']}@{DB_CONFIG['host']}/{DB_CONFIG['database']}"
-    # Choose which version to run
+
     try:
-        # SQLAlchemy version
         import_data_sqlalchemy(
             customer_file='data/customers.csv',
             order_file='data/order.csv',
             connection_string=CONNECTION_STRING,
             batch_size=1000
         )
-        
-        # # mysql-connector version
-        # import_data_connector(
-        #     customer_file='data/customers.csv',
-        #     order_file='data/order.csv',
-        #     db_config=DB_CONFIG,
-        #     batch_size=1000
-        # )
+
     except Exception as e:
         logger.error(f"Script failed: {str(e)}")

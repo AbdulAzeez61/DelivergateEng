@@ -39,6 +39,7 @@ def get_data(query, params=None):
         st.error(f"Failed to fetch data: {str(e)}")
         return pd.DataFrame()
 
+#data loaidng for ML model
 def load_customer_data():
     query = """
     SELECT customer_id, COUNT(display_order_id) AS total_orders, 
@@ -50,6 +51,7 @@ def load_customer_data():
     customer_data['is_repeat'] = (customer_data['total_orders'] > 1).astype(int)
     return customer_data
 
+#training ML model on retrieved data
 def train_model(data):
     if len(data) < 50:
         st.warning("Not enough data for reliable model training.")
@@ -245,20 +247,7 @@ def main():
             },
             hide_index=True
         )
-        
-        # st.header("Customer Repeat Purchase Prediction Model")
-
-        # customer_data = load_customer_data()
-        
-        # if not customer_data.empty:
-        #     model, accuracy = train_model(customer_data)
-        #     if model:
-        #         st.success(f"Model trained successfully with accuracy: {accuracy:.2f}")
-        #     else:
-        #         st.error("Model training was unsuccessful.")
-        # else:
-        #     st.error("No customer data found.")
-
+    
         st.header("Customer Repeat Purchase Prediction Model")
         customer_data = load_customer_data()
         
