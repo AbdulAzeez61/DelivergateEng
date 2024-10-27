@@ -28,7 +28,7 @@ MySQL Server
    
 #### 3. MySQL Database Setup
 
-   Use the tablesAndDb.sql to create the database and the necessary tables for the project
+   Use the `tablesAndDB.sql` to create the database and the necessary tables for the project
 
 #### 4. Data Import
 
