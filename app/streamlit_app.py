@@ -2,15 +2,13 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 from sqlalchemy import create_engine, text
-from datetime import datetime, timedelta
+from datetime import datetime
 from config import DATABASE_URL
 
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, precision_score, recall_score, confusion_matrix
 from sklearn.preprocessing import StandardScaler
-import sys
-import traceback
 import numpy as np
 import plotly.figure_factory as ff 
 
@@ -39,10 +37,10 @@ def get_data(query, params=None):
         st.error(f"Failed to fetch data: {str(e)}")
         return pd.DataFrame()
 
-#data loaidng for ML model
+# Data loading for ML model
 def load_customer_data():
     query = """
-    SELECT customer_id, COUNT(display_order_id) AS total_orders, 
+    SELECT customer_id, COUNT(order_id) AS total_orders, 
            SUM(total_amount) AS total_revenue
     FROM orders
     GROUP BY customer_id
@@ -51,7 +49,7 @@ def load_customer_data():
     customer_data['is_repeat'] = (customer_data['total_orders'] > 1).astype(int)
     return customer_data
 
-#training ML model on retrieved data
+# Training ML model on retrieved data
 def train_model(data):
     if len(data) < 50:
         st.warning("Not enough data for reliable model training.")
@@ -88,7 +86,7 @@ def main():
     
     try:
         # Get date range for orders
-        all_orders = get_data("SELECT MIN(created_at) as min_date, MAX(created_at) as max_date FROM orders")
+        all_orders = get_data("SELECT MIN(order_date) as min_date, MAX(order_date) as max_date FROM orders")
         if all_orders.empty:
             st.error("No orders found in database")
             st.stop()
@@ -118,7 +116,7 @@ def main():
         )
         
         # Minimum orders filter
-        max_orders = get_data("""
+        max_orders = get_data(""" 
             SELECT MAX(order_count) as max_orders FROM (
                 SELECT customer_id, COUNT(*) as order_count 
                 FROM orders 
@@ -137,28 +135,28 @@ def main():
         WITH customer_stats AS (
             SELECT 
                 c.customer_id,
-                c.name,
-                COUNT(o.id) as order_count,
+                c.customer_name,
+                COUNT(o.order_id) as order_count,
                 SUM(o.total_amount) as total_spent
             FROM customers c
             JOIN orders o ON c.customer_id = o.customer_id
-            WHERE o.created_at BETWEEN :start_date AND :end_date
-            GROUP BY c.customer_id, c.name
-            HAVING COUNT(o.id) >= :min_orders
+            WHERE o.order_date BETWEEN :start_date AND :end_date
+            GROUP BY c.customer_id, c.customer_name
+            HAVING COUNT(o.order_id) >= :min_orders
             AND SUM(o.total_amount) >= :total_spent
         )
         SELECT 
-            o.id as order_id,
-            o.created_at,
+            o.order_id,
+            o.order_date,
             o.total_amount,
-            c.name as customer_name,
+            c.customer_name as customer_name,
             cs.total_spent,
             cs.order_count
         FROM orders o
         JOIN customers c ON o.customer_id = c.customer_id
         JOIN customer_stats cs ON c.customer_id = cs.customer_id
-        WHERE o.created_at BETWEEN :start_date AND :end_date
-        ORDER BY o.created_at DESC
+        WHERE o.order_date BETWEEN :start_date AND :end_date
+        ORDER BY o.order_date DESC
         """
         
         # Load filtered data
@@ -203,7 +201,7 @@ def main():
         
         # Revenue over time
         st.subheader("Revenue Over Time")
-        df['date'] = pd.to_datetime(df['created_at']).dt.date
+        df['date'] = pd.to_datetime(df['order_date']).dt.date
         daily_revenue = df.groupby('date')['total_amount'].sum().reset_index()
         
         fig_revenue = px.line(
@@ -235,7 +233,7 @@ def main():
             df.sort_values('order_count', ascending=True),
             use_container_width=True,
             column_config={
-                'created_at': st.column_config.DatetimeColumn('Order Date'),
+                'order_date': st.column_config.DatetimeColumn('Order Date'),
                 'total_amount': st.column_config.NumberColumn(
                     'Total Amount',
                     format='$%.2f'

@@ -56,22 +56,21 @@ def clean_customer_data(df):
         if duplicates > 0:
             logger.warning(f"Removed {duplicates} duplicate customer IDs")
         
-        # Fill NaN values in name and with a placeholder
+        # Fill NaN values in name with a placeholder
         df['name'] = df['name'].fillna('Unknown Customer')
-        df['email'] = df['email'].fillna('Unknown Customer')
-        df['email'] = df['email'].astype(str)
 
         # Convert customer_id to integer
         df['customer_id'] = df['customer_id'].astype(int)
         
         # Clean name
-        df['name'] = df['name'].str.strip()
-        df['email'] = df['email'].str.strip()
+        df['customer_name'] = df['name'].str.strip()
 
-        df['name'] = df['name'].str.replace(r'[^\w\s-]', '', regex=True)
-        df.loc[df['name'].str.len() == 0, 'name'] = 'Unknown Customer'
-        df['name'] = df['name'].str[:255]
+        df['customer_name'] = df['customer_name'].str.replace(r'[^\w\s-]', '', regex=True)
+        df.loc[df['customer_name'].str.len() == 0, 'name'] = 'Unknown Customer'
+        df['customer_name'] = df['customer_name'].str[:255]
         
+        df = df[['customer_id','customer_name']]
+
         logger.info(f"Cleaned {len(df)} customer records")
         return df
     except Exception as e:
@@ -83,25 +82,23 @@ def clean_order_data(df, valid_customer_ids=None):
     try:
         initial_count = len(df)
         
-        # Drop orders with missing order_ids
-        df = df.dropna(subset=['id'])
-        df = df.dropna(subset=['display_order_id'])
-        df = df.dropna(subset=['customer_id'])
-        df = df.dropna(subset=['total_amount'])
+        # Drop orders with missing order_ids, customer_ids, or total_amount
+        df = df.dropna(subset=['display_order_id', 'customer_id', 'total_amount'])
 
         logger.info(f"Dropped {initial_count - len(df)} orders with missing information")
         
         # Remove duplicates
-        duplicates = df.duplicated(subset=['id'], keep='first').sum()
+        duplicates = df.duplicated(subset=['display_order_id'], keep='first').sum()
         df = df.drop_duplicates(subset=['display_order_id'], keep='first')
         if duplicates > 0:
             logger.warning(f"Removed {duplicates} duplicate order IDs")
         
-        # Convert IDs to integers
-        df['id'] = df['id'].astype(int)
-        df['display_order_id'] = df['display_order_id'].astype(str)
-        df['customer_id'] = df['customer_id'].astype(int)
+        # Rename 'display_order_id' to 'order_id' and keep only relevant columns
+        df['order_id'] = df['display_order_id'].astype(str)
         
+        # Convert customer_id to int
+        df['customer_id'] = df['customer_id'].astype(int)
+
         # Filter for valid customer IDs if provided
         if valid_customer_ids is not None:
             invalid_orders = df[~df['customer_id'].isin(valid_customer_ids)]
@@ -109,18 +106,19 @@ def clean_order_data(df, valid_customer_ids=None):
             logger.info(f"Filtered out {len(invalid_orders)} orders with invalid customer IDs")
         
         # Handle total_amount
-        df['total_amount'] = pd.to_numeric(df['total_amount'], errors='coerce')
-        df['total_amount'] = df['total_amount'].fillna(0.0)
+        df['total_amount'] = pd.to_numeric(df['total_amount'], errors='coerce').fillna(0.0)
         
         # Handle created_at
-        df['created_at'] = pd.to_datetime(df['created_at'], errors='coerce')
-        df['created_at'] = df['created_at'].fillna(pd.Timestamp.now())
+        df['order_date'] = pd.to_datetime(df['created_at'], errors='coerce').fillna(pd.Timestamp.now())
         
+        df = df[['order_id', 'customer_id', 'total_amount', 'order_date']]
+
         logger.info(f"Cleaned {len(df)} order records")
         return df
     except Exception as e:
         logger.error(f"Error cleaning order data: {str(e)}")
         raise
+
 
 def import_data_sqlalchemy(customer_file, order_file, connection_string, batch_size=1000):
     """Import data using sql alchemy"""
@@ -129,7 +127,7 @@ def import_data_sqlalchemy(customer_file, order_file, connection_string, batch_s
         # Read and clean data
         logger.info("Reading and cleaning data...")
         customers_df = clean_customer_data(pd.read_csv(customer_file))
-        orders_df = clean_order_data(pd.read_csv(order_file))
+        orders_df = pd.read_csv(order_file)
         
         orphaned_customer_ids = analyze_data_integrity(customers_df, orders_df)
         
